@@ -146,7 +146,7 @@ fi
 
 if [[ "$dns_ip" != "$router_ip" ]]; then
 	echo "IP mudou -- old_ip='$dns_ip' --- new_ip='$router_ip'"
-	update_FREE_record=$(wget - "" http://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} 2>&1 | grep "200 OK")
+	update_FREE_record=$(wget -O- http://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} | grep "200 OK")
 	update_FREE_record=${update_FREE_record:(-2)}
 	echo $update_FREE_record
 	if [[ "$update_FREE_record" == "OK" ]]; then
