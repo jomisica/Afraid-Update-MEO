@@ -143,7 +143,6 @@ if [[ $? == 1 ]]; then
 	exit 1
 fi
 
-
 if [[ "$dns_ip" != "$router_ip" ]]; then
 	echo "IP mudou -- IP_Antigo='$dns_ip' --- Novo_IP='$router_ip'"
 	update_FREE_record=$(wget --spider https://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} 2>&1 | grep "200 OK")
