@@ -131,26 +131,24 @@ get_dns_host_ip(){
 	return 0
 }
 
-
 dns_ip=$(get_dns_host_ip)
 if [[ $? == 1 ]]; then
-	echo error
-	exit 0
+	echo "Erro resolvendo o domínio."
+	exit 1
 fi
 
 router_ip=$(get_meo_router_external_ip)
 if [[ $? == 1 ]]; then
-	echo error
-	exit 0
+	echo "Erro obtendo o IP externo do router."
+	exit 1
 fi
 
 if [[ "$dns_ip" != "$router_ip" ]]; then
-	echo "IP mudou -- old_ip='$dns_ip' --- new_ip='$router_ip'"
-	update_FREE_record=$(wget -O- http://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} | grep "200 OK")
+	echo "IP mudou -- IP_Antigo='$dns_ip' --- Novo_IP='$router_ip'"
+	update_FREE_record=$(wget --spider https://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} 2>&1 | grep "200 OK")
 	update_FREE_record=${update_FREE_record:(-2)}
-	echo $update_FREE_record
 	if [[ "$update_FREE_record" == "OK" ]]; then
-		echo "freedns.afraid.org - Record All actualizado"
+		echo "O registo para o domínio ${DOMAINNAME} foi atualizado com sucesso!"
 	fi
 fi
 
