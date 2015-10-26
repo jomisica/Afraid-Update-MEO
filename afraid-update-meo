@@ -1,0 +1,157 @@
+#!/bin/bash
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# Author: José Miguel Silva Caldeira
+# Email: miguel@ncdc.pt
+# Site: http://www.ncdc.pt
+# Date: 25 Out 2015
+#
+#
+# Este script tem como função actualizar os registos de DNS no
+# freedns.afraid.org, para os utilizadores MEO e que utilizem o
+# router Technicolor TG784n v3, que por alguma razão precisem
+# aceder um sistema em sua casa.
+#
+# É necessário que tenham acesso ao vosso router através de telnet,
+# para que seja possível ao script obter o IP actual do router e
+# compara-lo com o IP no afraid.org.
+#
+# Caso tenham dificuldade em aceder o vosso router vejam este
+# artigo: https://www.ncdc.pt/2014/11/07/como-ter-acesso-total-ao-router-technicolor-tg784n-v3-da-meo/
+#
+# Este script tem de correr com o cron, para isso
+# basta criar um ficheiro em /etc/cron.d/afraid-update-meo
+# Podemos inserir esta linha com exemplo para que corra
+# de cinco em cinco minutos, claro que podemos defenir um
+# tempo mais curto ou mais longo.
+# */5 * * * * /root/afraid-update-meo
+#  
+#
+# Who never miss a dream to fight,
+# a project to accomplish, something to learn,
+# a place to go and someone to love.
+
+############################################
+#               Configuration              #
+############################################
+
+# Your dimainname on afraid
+# eg: DOMAINNAME="ncdc.pt"
+DOMAINNAME="example.com"
+
+# The id to update your records
+# eg: DIRECT_URL_ID="v2uUt91EgiU7XoZXI4c88nczKsol6H4RSkY04axq0Va1"
+DIRECT_URL_ID="YOUR DIRECT URL ID"
+
+# The router IP
+# eg: ROUTER_IP="192.168.1.254"
+ROUTER_IP="YOUR ROUTER IP"
+
+# The router username
+# eg: ROUTER_USERNAME="sumeo"
+ROUTER_USERNAME="YOUR ROUTER USERNAME"
+
+# The router password
+# eg: ROUTER_PASSWORD="1234567890"
+ROUTER_PASSWORD="YOUR ROUTER PASSWORD"
+
+############################################
+#          END Configuration               #
+############################################
+
+export LANG=C
+
+is_valid_ip(){
+	if [[ -z "$1" ]]; then
+		return 1
+	fi
+	if [[ $1 =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+		local IFS='.'
+		local ip=($1)
+
+		if [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+get_meo_router_external_ip(){
+output=$(expect  <<EOF
+spawn telnet ${ROUTER_IP}
+set timeout 20
+expect "Username:"
+send "${ROUTER_USERNAME}\r"
+expect "Password :"
+send "${ROUTER_PASSWORD}\r"
+expect "{${ROUTER_USERNAME}}=>"
+send ":ip iplist\r"
+expect "{${ROUTER_USERNAME}}=>"
+send "exit\r"
+exit
+EOF
+)
+
+	ip=$(grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' <<< $(echo "$output" | grep "/32 Internet" | cut -d '/' -f 1))
+
+	if [[ -z $ip ]]; then
+		return 1
+	fi
+	is_valid_ip "$ip"
+	if [[ $? == 1 ]]; then
+		return 1
+	fi
+	echo "$ip"
+	return 0
+}
+
+get_dns_host_ip(){
+	ip=$(nslookup -type=A ${DOMAINNAME} 50.23.197.95 | grep -e 'Address:.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' | cut -d ' ' -f 2)
+	if [[ -z $ip ]]; then
+		ip=$(nslookup -type=A ${DOMAINNAME} 208.43.71.243 | grep -e 'Address:.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' | cut -d ' ' -f 2)
+	fi
+	if [[ -z $ip ]]; then
+		ip=$(nslookup -type=A ${DOMAINNAME} 69.197.18.162 | grep -e 'Address:.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' | cut -d ' ' -f 2)
+	fi
+	if [[ -z $ip ]]; then
+		ip=$(nslookup -type=A ${DOMAINNAME} 8.8.8.8 | grep -e 'Address:.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' | cut -d ' ' -f 2)
+	fi
+	if [[ -z $ip ]]; then
+		return 1
+	fi
+	is_valid_ip "$ip"
+	if [[ $? == 1 ]]; then
+		return 1
+	fi
+	echo "$ip"
+	return 0
+}
+
+
+dns_ip=$(get_dns_host_ip)
+if [[ $? == 1 ]]; then
+	echo error
+	exit 0
+fi
+
+router_ip=$(get_meo_router_external_ip)
+if [[ $? == 1 ]]; then
+	echo error
+	exit 0
+fi
+
+if [[ "$dns_ip" != "$router_ip" ]]; then
+	echo "IP mudou -- old_ip='$dns_ip' --- new_ip='$router_ip'"
+	update_FREE_record=$(wget - "" http://freedns.afraid.org/dynamic/update.php?${DIRECT_URL_ID} 2>&1 | grep "200 OK")
+	update_FREE_record=${update_FREE_record:(-2)}
+	echo $update_FREE_record
+	if [[ "$update_FREE_record" == "OK" ]]; then
+		echo "freedns.afraid.org - Record All actualizado"
+	fi
+fi
+
+exit 0
