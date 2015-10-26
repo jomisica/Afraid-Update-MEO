@@ -25,7 +25,7 @@ The manual installation of the script can be made as follows:
 
  # cp afraid-update-meo /usr/bin
 
- # chmod 754 afraid-update-meo
+ # chmod 750 afraid-update-meo
 
 Create a cron job:
 
